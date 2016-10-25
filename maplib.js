@@ -5,7 +5,7 @@ var maplib = maplib || {};
 
 // MAPLIB container for commmon methods and properties
 maplib = {
-	geocoder: null,
+	geocoder: new google.maps.Geocoder(),
 	map: null,
 	pin: undefined,
 	marker: null,
@@ -33,20 +33,14 @@ maplib = {
 	// loads a map into specified div on the page
 	// loadMap: function( mapDiv, arg1=null, arg2=null ) {
 	loadMap: function( mapDiv ) {
-		geocoder = new google.maps.Geocoder();
-		// if( !arg1 && !arg2 ) {
-
-		// }
-		// else {
-
-		// }
-		var latlng = new google.maps.LatLng(28.6139391, 77.2090212);
+		var latlng = this.center || new google.maps.LatLng(28.6139391, 77.2090212);
 		var mapOptions = {
 			zoom: 11,
 			center: latlng,
 			mapTypeId: 'roadmap'
 		}
 		this.map = new google.maps.Map(document.getElementById(mapDiv), mapOptions);
+		return this.map
 	},
 
 	resetMap: function() {
@@ -70,6 +64,20 @@ maplib = {
 	// Returns the Google LatLng Object of the given lat, lng pair
 	getLatLngObject: function( lat, lng ) {
 		return new google.maps.LatLng( parseFloat(lat), parseFloat(lng) );
+	},
+
+	getGeocode: function(address, callback) {
+        maplib.geocoder.geocode({'address': address}, function(results, status) {
+			if (status === 'OK') {
+				var loc = results[0].geometry.location
+				var lat = results[0].geometry.location.lat()
+				var lng = results[0].geometry.location.lng()
+				callback(lat, lng)
+			}
+			else {
+				console.warn('Geocode was not successful for the following reason: ' + status)
+			}
+        })
 	},
 
 	// returns a new marker with specified latlng
