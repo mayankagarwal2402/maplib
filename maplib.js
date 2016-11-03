@@ -5,7 +5,7 @@ var maplib = maplib || {};
 
 // MAPLIB container for commmon methods and properties
 maplib = {
-	geocoder: new google.maps.Geocoder(),
+	geocoder: null,
 	map: null,
 	pin: undefined,
 	marker: null,
@@ -17,13 +17,14 @@ maplib = {
 	    strokeWeight: 5,
 	    map: null
 	},
-	center: null,
+	center: google.maps.LatLng(28.6139391, 77.2090212),
 	directions: [],
 	directionsService: new google.maps.DirectionsService(),
 	waypointMarkers: false,
 	loopWaypoints: false,
 	markerCluster: null,
 	polygons: [],
+	heatmap: null,
 
 	// maplib logs: log messages displayed with custom annotations
 	log: function(msg) {
@@ -32,14 +33,36 @@ maplib = {
 
 	// loads a map into specified div on the page
 	// loadMap: function( mapDiv, arg1=null, arg2=null ) {
-	loadMap: function( mapDiv ) {
-		var latlng = this.center || new google.maps.LatLng(28.6139391, 77.2090212);
+		// if( !arg1 && !arg2 ) {}
+		// else {}
+	loadMap: function( mapDiv, options ) {
 		var mapOptions = {
-			zoom: 11,
-			center: latlng,
-			mapTypeId: 'roadmap'
+			zoom: 13,
+			center: this.center,
+			mapTypeId: 'roadmap',
 		}
-		this.map = new google.maps.Map(document.getElementById(mapDiv), mapOptions);
+
+		if(options) {
+			if(options.theme == 'dark') {
+				mapOptions.styles = [{"featureType":"all","elementType":"labels.text.fill","stylers":[{"saturation":36},{"color":"#000000"},{"lightness":40}]},{"featureType":"all","elementType":"labels.text.stroke","stylers":[{"visibility":"on"},{"color":"#000000"},{"lightness":16}]},{"featureType":"all","elementType":"labels.icon","stylers":[{"visibility":"off"}]},{"featureType":"administrative","elementType":"geometry.fill","stylers":[{"color":"#000000"},{"lightness":20}]},{"featureType":"administrative","elementType":"geometry.stroke","stylers":[{"color":"#000000"},{"lightness":17},{"weight":1.2}]},{"featureType":"landscape","elementType":"geometry","stylers":[{"color":"#000000"},{"lightness":20}]},{"featureType":"poi","elementType":"geometry","stylers":[{"color":"#000000"},{"lightness":21}]},{"featureType":"road.highway","elementType":"geometry.fill","stylers":[{"color":"#000000"},{"lightness":17}]},{"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#000000"},{"lightness":29},{"weight":0.2}]},{"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#000000"},{"lightness":18}]},{"featureType":"road.local","elementType":"geometry","stylers":[{"color":"#000000"},{"lightness":16}]},{"featureType":"transit","elementType":"geometry","stylers":[{"color":"#000000"},{"lightness":19}]},{"featureType":"water","elementType":"geometry","stylers":[{"color":"#000000"},{"lightness":17}]}] 
+			}
+			else if(options.theme != 'light') {
+				this.log('No theme named \''+options.theme+'\'. Defaulted to \'light\'')
+			}
+			if(options.center) {
+				this.center = getLatLngObject( center.lat, center.lng )
+				mapOptions.center = this.center
+			}
+		}
+
+		if( typeof mapDiv === "string" ) {
+			mapDiv_obj = document.getElementById(mapDiv)
+		}
+		else {
+			mapDiv_obj = mapDiv	
+		}
+
+		this.map = new google.maps.Map(mapDiv_obj, mapOptions);
 		return this.map
 	},
 
@@ -61,13 +84,27 @@ maplib = {
 		google.maps.event.trigger(maplib.map, 'resize');
 	},
 
+	getLatLng: function(marker_or_location) {
+		if( marker_or_location.getPosition ) {
+			var position = marker_or_location.getPosition()
+		}
+		else {
+			var position = marker_or_location
+		}
+		return {
+			'lat': position.lat(),
+			'lng': position.lng(),
+		}
+	},
+
 	// Returns the Google LatLng Object of the given lat, lng pair
 	getLatLngObject: function( lat, lng ) {
 		return new google.maps.LatLng( parseFloat(lat), parseFloat(lng) );
 	},
 
 	getGeocode: function(address, callback) {
-        maplib.geocoder.geocode({'address': address}, function(results, status) {
+		this.geocoder = this.geocoder || new google.maps.Geocoder();
+	        maplib.geocoder.geocode({'address': address}, function(results, status) {
 			if (status === 'OK') {
 				var loc = results[0].geometry.location
 				var lat = results[0].geometry.location.lat()
@@ -77,7 +114,7 @@ maplib = {
 			else {
 				console.warn('Geocode was not successful for the following reason: ' + status)
 			}
-        })
+	        })
 	},
 
 	// returns a new marker with specified latlng
@@ -93,41 +130,78 @@ maplib = {
 
 	// Sets the map on all markers in the array.
 	setAllMap: function(map) {
-		this.markers.forEach(function(marker){
+		this.markers.forEach(function(marker) {
 			marker.setMap(map);
 		});
 	},
 
-	// Removes the markers from the map, but keeps them in the array.
-	hideMarkers: function() {
-		this.setAllMap(null);
-	},
-
 	// Shows any markers currently in the array.
-	showMarkers: function( optional_marker_arg ) {
-		if( optional_marker_arg ) {
-			optional_marker_arg.setMap(this.map);
+	showMarkers: function( markers ) {
+		if( typeof markers === "undefined" ) {
+			markers = this.markers
+		}
+
+		if( markers instanceof Array ) {
+			markers.forEach( function(marker) {
+				marker.setMap(maplib.map)
+				marker.setVisible(true)
+			});
 		}
 		else {
-			this.setAllMap(this.map);
+			markers.setMap(this.map)
+			marker.setVisible(true)
+		}
+	},
+
+	// Removes the markers from the map, but keeps them in the array.
+	hideMarkers: function(markers) {
+		if( typeof markers === "undefined" ) {
+			markers = this.markers
+		}
+
+		if( markers instanceof Array ) {
+			markers.forEach( function(marker) {
+				marker.setMap(null);
+				marker.setVisible(false);;
+			});
+		}
+		else {
+			markers.setMap(null);
+			marker.setVisible(false);;
 		}
 	},
 
 	// Deletes all markers in the array by removing references to them.
-	deleteMarkers: function() {
-		this.hideMarkers();
-		this.markers = [];
+	deleteMarkers: function(markers) {
+		if( typeof markers === "undefined" ) {
+			markers = this.markers
+			this.markers = []
+		}
+		if( markers instanceof Array ) {
+			markers.forEach( function(marker) {
+				marker.setMap(null);
+				maplib.markers.splice( maplib.markers.indexOf(marker), 1 )
+			});
+		}
+		else {
+			markers.setMap(null);
+			this.markers.splice( this.markers.indexOf(markers), 1 )
+		}
 	},
 
 	// Fits all the markers on currently on the map into one view
-	fitMarkers: function() {
-		if( this.markers.length == 1 ) {
+	fitMarkers: function(markers) {
+		if( typeof markers === "undefined" ) {
+			markers = this.markers
+		}
+		
+		if( !(markers instanceof Array) || (this.markers.length == 1) ) {
 			this.map.setZoom(13);
 			this.map.setCenter(this.markers[0].position);
 		}
 		else {
 			var markerBounds = new google.maps.LatLngBounds();
-			this.markers.forEach(function(marker){
+			markers.forEach(function(marker) {
 				markerBounds.extend(marker.position);
 			});
 			this.map.fitBounds(markerBounds);
@@ -211,17 +285,34 @@ maplib = {
 	},
 
 	// Generate a polyline joining all the markers in the order they were added
-	generatePolyline: function() {
-		this.polyline = new google.maps.Polyline(this.polyOptions);
-		var path = this.polyline.getPath();
-		this.markers.forEach(function(marker){
+	generatePolyline: function(markers, color) {
+		this.polyOptions.strokeColor = color || this.polyOptions.strokeColor
+		
+		var polyline = new google.maps.Polyline(this.polyOptions);
+		var path = polyline.getPath();
+		
+		if( typeof markers === "undefined" ) {
+			markers = this.markers
+		}
+		markers.forEach(function(marker){
 			path.push( marker.position );
 		});
-		this.showPolyline();
+		
+		this.polyline = polyline 
+		this.directions.push( polyline )
+		this.showPolyline( polyline );
+		
+		return polyline
 	},
 
-	showPolyline: function() {
-		if( this.polyline ) { this.polyline.setMap(this.map); }
+	getPolyString(polyline) {
+		var string = google.maps.geometry.encoding.encodePath( polyline.getPath() );
+		return string
+	},
+
+	showPolyline: function(polyline) {
+		var polyline = polyline || this.polyline
+		if( polyline ) { polyline.setMap(this.map); }
 	},
 
 	showPolylines: function() {
@@ -271,34 +362,29 @@ maplib = {
 		return polyline;
 	},
 
-	displayPolyline: function( polyline ) {
-		var decodedPath = google.maps.geometry.encoding.decodePath(polyline);
-	    var decodedLevels = decodeLevels(decodedPath);
-	    var color = this.getRandomColor();
-	    console.log(polyline);
-
-	    line = new google.maps.Polyline({
-	        path: decodedPath,
-	        levels: decodedLevels,
-	        strokeColor: color,
-	        strokeOpacity: 1.0,
-	        strokeWeight: 5
-	    });
-
-	    this.directions.push(line);
-
-
-		line.setMap(this.map);
-	    console.log(decodedPath);
-
+	displayPolyline: function( polystring, color ) {
 	    function decodeLevels(decodedPath) {
 			var decodedLevels = [];
 			for (var i = 0; i < decodedPath.length ; ++i) {
 			    decodedLevels.push('B');
 			}
-			console.log(decodedLevels);
 			return decodedLevels;
 		}
+
+		var decodedPath = google.maps.geometry.encoding.decodePath(polystring);
+		var decodedLevels = decodeLevels(decodedPath);
+
+	    polyline = new google.maps.Polyline({
+	        path: decodedPath,
+	        levels: decodedLevels,
+	        strokeColor: color || this.getRandomColor(),
+	        strokeOpacity: 1.0,
+	        strokeWeight: 5
+	    });
+
+	    this.directions.push(polyline);
+		polyline.setMap(this.map);
+		return polyline
 	},
 	
 	// kept on hold because return response is cannot be returned as it is an async call
@@ -400,7 +486,122 @@ maplib = {
 		this.polygons.forEach( function(element, index) {
 			element.setMap(null);
 		});
-	}
+	},
+
+	clusterize: function(markers) {
+		if( typeof markers === "undefined" ) {
+			markers = this.markers
+		} 
+		if(typeof MarkerClusterer !== 'undefined') {
+			var map = this.map
+			var options = {
+				averageCenter: true, 
+				imagePath: 'https://raw.githubusercontent.com/googlemaps/v3-utility-library/master/markerclustererplus/images/m'
+			}
+			this.clusterer = {}
+			this.clusterer.markerClusterer = new MarkerClusterer(map, markers, options)
+			this.clusterer.maxZoom = this.clusterer.markerClusterer.getMaxZoom()
+			this.clusterer.gridSize = this.clusterer.markerClusterer.getGridSize()
+			this.hideClusters()
+		}
+		else {
+			console.error("MarkerClusterer Library Required")
+		}
+		return this.clusterer.markerClusterer
+	},
+
+	oneOnOneMarkers: function() {
+		this.clusterer.markerClusterer.setGridSize(1);
+		this.clusterer.markerClusterer.repaint();
+	},
+
+	showClusters: function() {
+		if(typeof this.clusterer.markerClusterer !== "undefined") {
+			this.clusterer.markerClusterer.setMaxZoom(this.clusterer.maxZoom);
+			this.clusterer.markerClusterer.setGridSize(this.clusterer.gridSize);
+			this.clusterer.markerClusterer.repaint();
+		}
+		else {
+			console.error("Clusterer Object Not Present");
+		}
+	},
+
+	hideClusters: function() {
+		if(typeof this.clusterer.markerClusterer !== "undefined") {
+			this.clusterer.markerClusterer.setMaxZoom(1);
+			this.clusterer.markerClusterer.setGridSize(1);
+			this.clusterer.markerClusterer.repaint();
+		}
+		else {
+			console.error("Clusterer Object Not Present");
+		}
+	},
+
+	deleteClusters: function() {
+		if( this.clusterer && this.clusterer.markerClusterer ) {
+        	this.clusterer.markerClusterer.clearMarkers()
+		}
+	},
+
+	createHeatmap: function(locations) {
+	    var heatmapData = [];
+		if( typeof locations !== "undefined" ) {
+	        this.markers.forEach( function(element, index) {
+	            heatmapData.push({location: element.getPosition(), weight: 1});
+	        });
+		}
+		else {
+			heatmapData = locations;
+		}
+		
+		if( !this.heatmap ) {
+	        this.heatmap = new google.maps.visualization.HeatmapLayer({
+	        	data: heatmapData,
+	        	radius: 30,
+	        	opacity: 0.7,
+	        });
+	        var gradient = [
+	         'rgba(0, 255, 255, 0)',
+	         'rgba(0, 255, 255, 1)',
+	         'rgba(0, 191, 255, 1)',
+	         'rgba(0, 127, 255, 1)',
+	         'rgba(0, 63, 255, 1)',
+	         'rgba(0, 0, 255, 1)',
+	         'rgba(0, 0, 223, 1)',
+	         'rgba(0, 0, 191, 1)',
+	         'rgba(0, 0, 159, 1)',
+	         'rgba(0, 0, 127, 1)',
+	         'rgba(63, 0, 91, 1)',
+	         'rgba(127, 0, 63, 1)',
+	         'rgba(191, 0, 31, 1)',
+	         'rgba(255, 0, 0, 1)'
+	       ]
+	       this.heatmap.set('gradient', gradient);
+		}
+		else {
+			this.heatmap.setData(heatmapData)
+		}
+		return this.heatmap
+	},
+
+	showHeatmap: function() {
+		this.heatmap.setMap(maplib.map);
+	},
+
+	hideHeatmap: function() {
+		this.heatmap.setMap(null);
+	},
+
+	toggle: function(objects) {
+		if( objects instanceof Array ) {
+			objects.forEach( function(object) {
+        		object.setMap(object.getMap() ? null : this.map);
+			});
+		}
+		else {
+        	objects.setMap(objects.getMap() ? null : this.map);
+		}
+    },
 }
 
 // marker click event
