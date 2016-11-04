@@ -1,4 +1,30 @@
 // MAPLIB library assumes the Google Maps API is being referenced on the page before referencing this library 
+passLatLngObject = function(func) {
+	console.log(arguments);
+	if(arguments.length < 1 || arguments.length > 2) {
+		this.log('Please enter a valid Geo-Coordinate.')
+	}
+	else if( arguments.length == 2 ) {
+		var lat = arguments[0]
+		var lng = arguments[1]
+	}
+	else {
+		var arg = arguments[0]
+		if( Array.isArray(arg) == true ) {
+			var lat = arg[0]
+			var lng = arg[1]
+		}
+		else if( typeof arg === 'object' ) {
+			var lat = arg.lat
+			var lng = arg.lng
+		}
+	}
+
+	return function() {
+		var latlng = new google.maps.LatLng( parseFloat(lat), parseFloat(lng) )
+		return func.apply(this, latlng)
+	}
+}
 
 // global namespace
 var maplib = maplib || {};
@@ -28,7 +54,15 @@ maplib = {
 
 	// maplib logs: log messages displayed with custom annotations
 	log: function(msg) {
-		console.info('MAPLIB: ' + msg);
+		console.info('MAPLIB: ' + msg)
+	},
+
+	dbg: function(msg, obj) {
+		if(!obj) {
+			obj = msg
+			msg = '' 
+		}
+		console.info( ('MAPLIB: ' + msg), obj )
 	},
 
 	// loads a map into specified div on the page
@@ -84,6 +118,29 @@ maplib = {
 		google.maps.event.trigger(maplib.map, 'resize');
 	},
 
+	getGeocode: function(address, callback) {
+		this.geocoder = this.geocoder || new google.maps.Geocoder();
+		maplib.geocoder.geocode({'address': address}, function(results, status) {
+			if (status === 'OK') {
+				var loc = results[0].geometry.location
+				var lat = results[0].geometry.location.lat()
+				var lng = results[0].geometry.location.lng()
+				callback(lat, lng)
+			}
+			else {
+				console.warn('Geocode was not successful for the following reason: ' + status)
+			}
+		})
+	},
+
+	// Returns the Google LatLng Object of the given lat, lng pair
+	// getLatLngObject: passLatLngObject(this.__getLatLngObject),
+	// __getLatLngObject: function( latlng ) {
+	getLatLngObject: function( lat, lng ) {
+		var latlng = new google.maps.LatLng( parseFloat(lat), parseFloat(lng) );
+		return latlng
+	},
+
 	getLatLng: function(marker_or_location) {
 		if( marker_or_location.getPosition ) {
 			var position = marker_or_location.getPosition()
@@ -97,27 +154,9 @@ maplib = {
 		}
 	},
 
-	// Returns the Google LatLng Object of the given lat, lng pair
-	getLatLngObject: function( lat, lng ) {
-		return new google.maps.LatLng( parseFloat(lat), parseFloat(lng) );
-	},
-
-	getGeocode: function(address, callback) {
-		this.geocoder = this.geocoder || new google.maps.Geocoder();
-	        maplib.geocoder.geocode({'address': address}, function(results, status) {
-			if (status === 'OK') {
-				var loc = results[0].geometry.location
-				var lat = results[0].geometry.location.lat()
-				var lng = results[0].geometry.location.lng()
-				callback(lat, lng)
-			}
-			else {
-				console.warn('Geocode was not successful for the following reason: ' + status)
-			}
-	        })
-	},
-
 	// returns a new marker with specified latlng
+	// addMarker: passLatLngObject(this.__addMarker),
+	// __addMarker: function(latlng) {
 	addMarker: function(lat, lng) {
 		var latlng = new google.maps.LatLng(lat, lng);
 		var marker = new google.maps.Marker({
@@ -148,7 +187,8 @@ maplib = {
 			});
 		}
 		else {
-			markers.setMap(this.map)
+			var marker = markers
+			marker.setMap(this.map)
 			marker.setVisible(true)
 		}
 	},
